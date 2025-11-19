@@ -103,13 +103,18 @@ export class EnemyManager {
         const gameTime = performance.now();
 
         // --- 1. Cập nhật và dọn dẹp Đạn của Kẻ thù ---
-        for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
-            const bullet = this.enemyBullets[i];
-            bullet.update(ticker);
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const enemy = this.enemies[i];
             
-            if (bullet.x < 0 || bullet.x > this.app.screen.width || bullet.y > this.groundY + 100) {
-                bullet.destroy();
-                this.enemyBullets.splice(i, 1);
+            // CHỈ update nếu Player còn sống
+            if (this.player.health > 0) { 
+                enemy.update(ticker, this.groundY, this.player, this.enemies, gameTime);
+            }
+            
+            if (enemy.isDead) {
+                enemy.destroy(); 
+                this.enemies.splice(i, 1);
+                this.enemiesRemaining--;
             }
         }
 
@@ -138,7 +143,7 @@ export class EnemyManager {
         
         if (playerDied) {
             if (this.player.parent) {
-                this.player.parent.removeChild(this.player);
+               
             }
         }
         

@@ -53,12 +53,10 @@ export class Character extends AnimatedSprite {
 
         if (!newFrames || newFrames.length === 0) {
             console.warn(`[Character] Animation set "${name}" not found or empty.`);
-            // Đặt texture về null để hiển thị sprite rỗng nếu không tìm thấy
             this.textures = []; 
             return;
         }
         
-        // 3. Thực hiện chuyển đổi
         this.textures = newFrames;
         this.currentAnimationName = name;
 
@@ -66,19 +64,12 @@ export class Character extends AnimatedSprite {
             this.animationSpeed = speed;
         }
         
-        // SỬA LỖI: Cần gọi play() sau khi đổi textures
-        if (!this.playing || restart) {
-            this.gotoAndPlay(0); 
-        } else {
-            this.play();
-        }
+        // SỬA LỖI: Luôn gọi gotoAndPlay(0) để đảm bảo animation chạy
+        this.gotoAndPlay(0); 
     }
-    /**
-     * Hàm cập nhật logic game (được gọi bởi Ticker).
-     * Hàm này được thiết kế để các lớp con (Player, Enemy) ghi đè (override).
-     * @param {PIXI.Ticker} ticker - Đối tượng Ticker từ PixiJS V8.
-     */
+
     update(ticker) {
+   
         // Lớp cơ sở không làm gì trong update, logic sẽ nằm ở lớp con.
     }
 }

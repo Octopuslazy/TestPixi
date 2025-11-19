@@ -36,16 +36,6 @@ export class Player extends Character {
         this.addChild(this.gun);
     }
 
-    // BỔ SUNG: Hàm reset chỉ số Player
-    resetStats() {
-        this.health = GameConstants.PLAYER_BASE_HEALTH;
-        this.currentAmmo = GameConstants.PLAYER_CLIP_SIZE;
-        this.isReloading = false;
-        this.reloadTimer = 0;
-        this.isInvulnerable = false;
-        this.lastDamageTime = 0;
-    }
-
     // Phương thức xử lý sát thương
     takeDamage(amount, gameTime) {
         if (this.isInvulnerable || this.health <= 0) return false;
@@ -59,11 +49,23 @@ export class Player extends Character {
         
         if (this.health <= 0) {
             this.health = 0;
-            return true; 
+            this.stop(); // Dừng hoạt ảnh khi chết
+            return true; // Đã chết
         }
         return false;
     }
-
+    
+    // BỔ SUNG: Hàm reset chỉ số Player
+    resetStats() {
+        this.health = GameConstants.PLAYER_BASE_HEALTH;
+        this.currentAmmo = GameConstants.PLAYER_CLIP_SIZE;
+        this.isReloading = false;
+        this.reloadTimer = 0;
+        this.isInvulnerable = false;
+        this.lastDamageTime = 0;
+        this.gotoAndPlay(0); // Bắt đầu lại animation
+    }
+    
     reload() {
         if (this.isReloading) return;
         this.isReloading = true;
@@ -72,7 +74,7 @@ export class Player extends Character {
     }
 
     shoot() {
-        if (this.isReloading || this.shootCooldown > 0) {
+        if (this.isReloading || this.shootCooldown > 0 || this.health <= 0) {
             return;
         }
         
@@ -97,10 +99,12 @@ export class Player extends Character {
     }
 
     setMovement(direction) {
+        if (this.health <= 0) return;
         this.vx = direction * MOVE_SPEED;
     }
 
     jump() {
+        if (this.health <= 0) return;
         if (!this.isJumping) {
             this.vy = -JUMP_VELOCITY;
             this.isJumping = true;
@@ -108,6 +112,13 @@ export class Player extends Character {
     }
 
     update(ticker, groundY = 400, mouseGlobalPos = null, minPlayerX = 0, maxPlayerX = Infinity) {
+        // Dừng tất cả logic nếu đã chết
+        if (this.health <= 0) {
+            this.vx = 0;
+            this.vy = 0;
+            return;
+        }
+        
         const dt = (typeof ticker?.deltaTime === 'number') ? ticker.deltaTime : 1; 
         const gameTime = performance.now(); 
         
