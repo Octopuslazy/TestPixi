@@ -15,6 +15,9 @@ export class Bullet extends Sprite {
         this.angle = angle; 
         this.life = 0; 
 
+        // Orient the sprite visually to match its travel direction
+        this.rotation = angle;
+
         // Tính toán vận tốc X và Y dựa trên góc bắn
         this.vx = Math.cos(angle) * BULLET_SPEED;
         this.vy = Math.sin(angle) * BULLET_SPEED;

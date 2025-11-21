@@ -8,9 +8,10 @@ export const Keyboard = (keyCode) => {
 
     key.downHandler = (event) => {
         if (event.code === key.code) {
-            if (key.isUp && key.press) key.press();
+            // Đặt trạng thái trước, rồi gọi press() để handler nhìn thấy isDown === true
             key.isDown = true;
             key.isUp = false;
+            if (key.isDown && key.press) key.press();
             event.preventDefault();
         }
     };

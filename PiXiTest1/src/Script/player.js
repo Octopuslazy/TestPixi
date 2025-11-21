@@ -1,17 +1,18 @@
 import { Character } from './Character.js';
 import { GameConstants } from './GameConstants.js'; 
 
-const MOVE_SPEED = 4; 
-const JUMP_VELOCITY = 15; 
-const GRAVITY = 0.6;      
+const MOVE_SPEED = 6; 
+const DRAG_FACTOR = 0.9; // Hệ số kéo/giảm tốc (giúp dừng mượt hơn)
 
 export class Player extends Character {
+    // Thuộc tính Game State
     health = GameConstants.PLAYER_BASE_HEALTH;
     currentAmmo = GameConstants.PLAYER_CLIP_SIZE;
     isReloading = false;
     reloadTimer = 0;
     aimAngle = 0; 
     
+    // Sát thương và Cooldown
     isInvulnerable = false; 
     lastDamageTime = 0;    
     
@@ -19,19 +20,29 @@ export class Player extends Character {
     shootCooldown = 0;
     SHOOT_DELAY = 10;
     
-    constructor(animations, gunSprite) { 
-        super(animations, 'idle', 0.15); 
-        
-        this.vx = 0;
-        this.vy = 0;
-        this.isJumping = false; 
-        this.defaultScaleX = this.scale.x; 
+    // Vận tốc và lực tác động
+    vx = 0;
+    vy = 0; 
+    inputVx = 0;
+    inputVy = 0;
+    
+    constructor(animations, gunSprite) { 
+        super(animations, 'idle', 0.15); 
+        
+        this.vx = 0;
+        this.vy = 0; 
+        
+        // Track inner sprite scale so we can flip the visual AnimatedSprite without
+        // affecting child objects like the gun.
+        this.spriteDefaultScale = this.sprite?.scale?.x || 1;
+        this.defaultScaleX = this.scale.x; 
 
         // [1. Gắn súng]
         this.gun = gunSprite;
-        this.gun.anchor.set(0.1, 0.5); 
-        this.gun.x = 20; 
-        this.gun.y = 0; 
+    // Use centered anchor so rotation looks consistent; orbit will position muzzle.
+    this.gun.anchor.set(0.5, 0.5);
+    this.gun.x = 20;
+    this.gun.y = 0;
         
         this.addChild(this.gun);
     }
@@ -55,7 +66,7 @@ export class Player extends Character {
         return false;
     }
     
-    // BỔ SUNG: Hàm reset chỉ số Player
+    // Hàm reset chỉ số Player
     resetStats() {
         this.health = GameConstants.PLAYER_BASE_HEALTH;
         this.currentAmmo = GameConstants.PLAYER_CLIP_SIZE;
@@ -83,10 +94,17 @@ export class Player extends Character {
             return;
         }
         
-        // --- LOGIC BẮN ---
-        const gunTipLocalPos = { x: this.gun.texture.width, y: 0 };
-        const gunTipGlobalPos = this.gun.toGlobal(gunTipLocalPos); 
-        const angle = this.aimAngle; 
+        // Use the global aim angle (world space) so bullets always travel toward cursor
+        const angle = this.aimAngle;
+
+        // Calculate bullet spawn position using the gun's global position so flips don't invert the barrel
+        const gunGlobalPos = this.gun.getGlobalPosition();
+        const gunRenderWidth = (this.gun.width && this.gun.width > 0) ? this.gun.width : (this.gun.texture?.width ? this.gun.texture.width * Math.abs(this.gun.scale.x || 1) : 20);
+        const offset = gunRenderWidth + 10; // small extra gap so bullet spawns ahead of the sprite
+        const gunTipGlobalPos = {
+            x: gunGlobalPos.x + Math.cos(angle) * offset,
+            y: gunGlobalPos.y + Math.sin(angle) * offset
+        };
         
         this.shootCooldown = this.SHOOT_DELAY;
         this.currentAmmo--; // Giảm số lượng đạn
@@ -98,21 +116,15 @@ export class Player extends Character {
         }
     }
 
-    setMovement(direction) {
+    // THAY ĐỔI: Gán lực di chuyển, không gán vận tốc trực tiếp
+    setMovement(directionX, directionY = 0) {
         if (this.health <= 0) return;
-        this.vx = direction * MOVE_SPEED;
+        this.inputVx = directionX; 
+        this.inputVy = directionY; 
     }
 
-    jump() {
-        if (this.health <= 0) return;
-        if (!this.isJumping) {
-            this.vy = -JUMP_VELOCITY;
-            this.isJumping = true;
-        }
-    }
-
-    update(ticker, groundY = 400, mouseGlobalPos = null, minPlayerX = 0, maxPlayerX = Infinity) {
-        // Dừng tất cả logic nếu đã chết
+    update(ticker, screenHeight, mouseGlobalPos = null, minPlayerX = 0, maxPlayerX = Infinity) {
+        
         if (this.health <= 0) {
             this.vx = 0;
             this.vy = 0;
@@ -132,12 +144,36 @@ export class Player extends Character {
             this.shootCooldown -= dt;
         }
         
-        // --- 1. VẬT LÝ ---
-        this.vy += GRAVITY * dt;
+        // --- 1. VẬT LÝ VÀ LÀM MƯỢT DI CHUYỂN ---
+        
+        // TÍNH TOÁN LỰC:
+        // Áp dụng lực input
+        this.vx += (this.inputVx * MOVE_SPEED - this.vx) * 0.2; 
+        this.vy += (this.inputVy * MOVE_SPEED - this.vy) * 0.2; 
+
+        // Áp dụng Drag (Làm chậm khi không có input)
+        if (this.inputVx === 0 && this.inputVy === 0) {
+            this.vx *= DRAG_FACTOR; 
+            this.vy *= DRAG_FACTOR; 
+        }
+
         this.x += this.vx * dt;
         this.y += this.vy * dt;
         
-        // --- KHÓA DI CHUYỂN NGANG ---
+        // --- KHÓA BIÊN MÀN HÌNH (Y) ---
+        const topBoundary = 50; 
+        const bottomBoundary = screenHeight - 50; 
+        
+        if (this.y < topBoundary) {
+            this.y = topBoundary;
+            if (this.vy < 0) { this.vy = 0; }
+        }
+        if (this.y > bottomBoundary) {
+            this.y = bottomBoundary;
+            if (this.vy > 0) { this.vy = 0; }
+        }
+        
+        // --- KHÓA BIÊN MÀN HÌNH (X) ---
         if (this.x < minPlayerX) {
             this.x = minPlayerX; 
             if (this.vx < 0) { this.vx = 0; }
@@ -147,15 +183,6 @@ export class Player extends Character {
              if (this.vx > 0) { this.vx = 0; }
         }
 
-        // --- 2. XỬ LÝ VA CHẠM MẶT ĐẤT ---
-        if (this.y >= groundY) {
-            this.y = groundY; 
-            this.vy = 0;            
-            this.isJumping = false; 
-        } else {
-            this.isJumping = true;
-        }
-        
         // --- LOGIC THAY ĐẠN ---
         if (this.isReloading) {
             this.reloadTimer -= dt;
@@ -166,43 +193,48 @@ export class Player extends Character {
             if (this.reloadTimer <= 0) {
                 this.isReloading = false;
                 this.currentAmmo = GameConstants.PLAYER_CLIP_SIZE; 
-                this.gun.rotation = this.aimAngle; 
+                // leave rotation to the normal pointer update in the next tick
                 console.log("Thay đạn hoàn tất. Ammo: " + this.currentAmmo);
             }
         }
 
-        // --- 3. ANIMATION VÀ LẬT HÌNH NHÂN VẬT ---
-        if (!this.isJumping) {
-            if (this.vx !== 0) {
-                this.switchAnimation('run', 0.15);
-                if (this.vx > 0) this.scale.x = this.defaultScaleX;
-                else if (this.vx < 0) this.scale.x = -this.defaultScaleX;
-            } else {
-                this.switchAnimation('idle', 0.1);
-            }
-        }
+        // --- 3. ANIMATION VÀ LẬT HÌNH NHÂN VẬT ---
+        // Use a small threshold so drag/residual velocity doesn't keep the run anim playing
+        const moveThreshold = 0.1;
+        if (Math.abs(this.vx) > moveThreshold || Math.abs(this.vy) > moveThreshold) {
+            this.switchAnimation('run', 0.15);
+            if (this.vx > 0) this.sprite.scale.x = Math.abs(this.spriteDefaultScale);
+            else if (this.vx < 0) this.sprite.scale.x = -Math.abs(this.spriteDefaultScale);
+        } else {
+            this.switchAnimation('idle', 0.1);
+        }
 
         // --- 4. XOAY VÀ LẬT SÚNG THEO CHUỘT ---
-        if (this.gun && mouseGlobalPos) {
-            const playerGlobalPos = this.position; 
-            const dx = mouseGlobalPos.x - playerGlobalPos.x;
-            const dy = mouseGlobalPos.y - playerGlobalPos.y;
-            let angle = Math.atan2(dy, dx); 
-            
-            this.aimAngle = angle; 
+        if (this.gun && mouseGlobalPos) {
+            // Compute the global angle from the gun's world position to the mouse. This is the
+            // direction bullets should travel in world-space and avoids issues when the player
+            // container is flipped.
+            const gunGlobalPos = this.gun.getGlobalPosition();
+            const dxG = mouseGlobalPos.x - gunGlobalPos.x;
+            const dyG = mouseGlobalPos.y - gunGlobalPos.y;
+            const globalAngle = Math.atan2(dyG, dxG);
+
+            this.aimAngle = globalAngle;
 
             if (!this.isReloading) {
-                const mouseIsLeft = dx < 0; 
-                this.gun.x = 20;
+                // Orbit the gun around the player center using the global aiming angle so
+                // the muzzle always sits on the side toward the cursor and points at it.
+                const orbitRadius = GameConstants.PLAYER_GUN_ORBIT_RADIUS;
+                this.gun.x = Math.cos(globalAngle) * orbitRadius;
+                this.gun.y = Math.sin(globalAngle) * orbitRadius;
 
-                if (mouseIsLeft) {
-                    this.gun.scale.y = -1;
-                    this.gun.rotation = Math.PI - this.aimAngle; 
-                } else {
-                    this.gun.scale.y = 1; 
-                    this.gun.rotation = this.aimAngle; 
-                }
+                // Use the true global aiming angle so the muzzle points at the cursor/bullets.
+                // Keep the gun texture upright (positive scale.y). If your gun art faces the
+                // opposite direction, change `PLAYER_GUN_ROTATION_OFFSET` in `GameConstants`.
+                const rotationOffset = GameConstants.PLAYER_GUN_ROTATION_OFFSET || 0;
+                this.gun.scale.y = Math.abs(this.gun.scale.y);
+                this.gun.rotation = globalAngle + rotationOffset;
             }
-        }
+        }
     }
 }

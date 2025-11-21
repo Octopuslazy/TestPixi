@@ -9,14 +9,19 @@ export class Enemy extends Character {
         this.health = health;
         this.collisionDamage = damage;
         this.isDead = false;
-        this.isGrounded = false;
+        // LOẠI BỎ: isGrounded
+        // this.isGrounded = false;
     }
 
     // Phương thức nhận sát thương
     takeDamage(amount) {
+        const prevHealth = this.health;
         this.health -= amount;
+        console.log(`[Enemy] ${this.enemyType} took ${amount} damage. Health: ${prevHealth} -> ${this.health}`);
+
         if (this.health <= 0) {
             this.isDead = true;
+            console.log(`[Enemy] ${this.enemyType} died.`);
             return true; // Kẻ thù đã chết
         }
         return false; // Kẻ thù vẫn sống
@@ -30,20 +35,8 @@ export class Enemy extends Character {
         super.destroy(); 
     }
 
-    update(ticker, groundY = 400, player = null, enemies = null, gameTime = 0) {
-        // Logic vật lý chung (trọng lực, va chạm đất)
-        const GRAVITY = 0.6;
-        const dt = (typeof ticker?.deltaTime === 'number') ? ticker.deltaTime : 1; 
-
-        if (!this.isGrounded) {
-            this.y += GRAVITY * dt;
-        }
-
-        if (this.y >= groundY) {
-            this.y = groundY;
-            this.isGrounded = true;
-        } else {
-            this.isGrounded = false;
-        }
+    // THAY ĐỔI: Loại bỏ logic trọng lực/groundY
+    update(ticker, screenHeight, player = null, enemies = null, gameTime = 0) {
+        // Lớp cơ sở không làm gì (logic sẽ nằm ở lớp con)
     }
 }

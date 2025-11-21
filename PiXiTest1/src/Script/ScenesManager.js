@@ -3,8 +3,9 @@ import BgUrl from '../UI/Assets/MainBackGround.png';
 
 let app;
 export const Screens = {
-    SCREEN1: null, 
-    SCREEN2: null,
+    SCREEN1: null, 
+    SCREEN2: null,
+    SCREEN3: null,
     OVERLAY: null // THÊM CONTAINER OVERLAY
 };
 
@@ -25,12 +26,20 @@ const createBackgroundSprite = (texture, x) => {
 export async function initSceneManager(pixiApp) {
     app = pixiApp;
 
-    Screens.SCREEN1 = new Container({ name: 'SCREEN1' }); 
-    Screens.SCREEN2 = new Container({ name: 'SCREEN2' }); 
-    Screens.OVERLAY = new Container({ name: 'OVERLAY' }); // KHỞI TẠO OVERLAY
+    Screens.SCREEN1 = new Container(); 
+    Screens.SCREEN2 = new Container(); 
+    Screens.SCREEN3 = new Container(); 
+    Screens.OVERLAY = new Container(); // KHỞI TẠO OVERLAY
+
+    // Pixi v8: use label instead of deprecated name property
+    Screens.SCREEN1.label = 'SCREEN1';
+    Screens.SCREEN2.label = 'SCREEN2';
+    Screens.SCREEN3.label = 'SCREEN3';
+    Screens.OVERLAY.label = 'OVERLAY'; // KHỞI TẠO OVERLAY
 
     app.stage.addChild(Screens.SCREEN1);
     app.stage.addChild(Screens.SCREEN2);
+    app.stage.addChild(Screens.SCREEN3);
     app.stage.addChild(Screens.OVERLAY); // THÊM OVERLAY LÊN TRÊN CÙNG
     
     Screens.SCREEN1.position.set(0, 0);
@@ -39,6 +48,7 @@ export async function initSceneManager(pixiApp) {
 
     // Ẩn tất cả các screen khác trừ Screen 1
     Screens.SCREEN2.visible = false;
+    Screens.SCREEN3.visible = false;
     Screens.OVERLAY.visible = false; // OVERLAY ẩn mặc định
 
     // --- XỬ LÝ BACKGROUND ---
@@ -53,6 +63,10 @@ export async function initSceneManager(pixiApp) {
         const bg2 = createBackgroundSprite(bgTexture, 0);
         Screens.SCREEN2.addChild(bg2);
         backgrounds.push(bg2); 
+
+        const bg3 = createBackgroundSprite(bgTexture, 0);
+        Screens.SCREEN3.addChild(bg3);
+        backgrounds.push(bg3);
 
 
         // Hàm resize background

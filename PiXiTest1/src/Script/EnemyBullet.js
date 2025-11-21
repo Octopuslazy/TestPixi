@@ -1,9 +1,10 @@
 // EnemyBullet.js
 
 import { Sprite } from 'pixi.js';
-import { GameConstants } from './GameConstants.js'; // Cần GameConstants
+import { GameConstants } from './GameConstants.js'; 
 
-const ENEMY_BULLET_SPEED = 10; // Tốc độ ổn định cho đạn quái
+// THAY ĐỔI: Dùng tốc độ ổn định, không quá ngắn
+const ENEMY_BULLET_SPEED = 12; 
 
 export class EnemyBullet extends Sprite {
     constructor(texture, angle) {
@@ -15,7 +16,7 @@ export class EnemyBullet extends Sprite {
         this.vx = Math.cos(angle) * ENEMY_BULLET_SPEED;
         this.vy = Math.sin(angle) * ENEMY_BULLET_SPEED;
         
-        this.scale.set(1.5); 
+        this.scale.set(0.48);
     }
 
     update(ticker) {
@@ -23,8 +24,6 @@ export class EnemyBullet extends Sprite {
         
         this.x += this.vx * dt;
         this.y += this.vy * dt;
-
-        // Tạm thời không có logic tự hủy, sẽ để Game Loop xử lý
     }
     
     destroy() {

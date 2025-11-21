@@ -1,12 +1,13 @@
 // src/sprites/Character.js
 
-import { AnimatedSprite } from 'pixi.js';
+import { AnimatedSprite, Container } from 'pixi.js';
 
 /**
  * Lớp cơ sở (Base Class) quản lý việc chuyển đổi giữa nhiều hoạt ảnh.
- * Nó kế thừa từ PixiJS AnimatedSprite để xử lý logic hiển thị frame.
+ * Thay vì kế thừa trực tiếp từ AnimatedSprite (không còn cho phép addChild),
+ * Character giờ là một Container chứa một AnimatedSprite nội bộ.
  */
-export class Character extends AnimatedSprite {
+export class Character extends Container {
     /**
      * @param {Object} animations - Object chứa tất cả các frames đã được trích xuất.
      * Cấu trúc: { 'run': [Texture, ...], 'idle': [Texture, ...] }
@@ -14,24 +15,26 @@ export class Character extends AnimatedSprite {
      * @param {number} defaultSpeed - Tốc độ hoạt ảnh mặc định (ví dụ: 0.15).
      */
     constructor(animations, defaultAnimation = 'idle', defaultSpeed = 0.2) {
-        // Đảm bảo hoạt ảnh mặc định tồn tại trước khi gọi super()
+        super();
+
+        // Đảm bảo hoạt ảnh mặc định tồn tại
         const initialFrames = animations[defaultAnimation] || [];
-        
-        // V8: Khởi tạo AnimatedSprite với frames mặc định
-        super(initialFrames); 
-        
+
         // Lưu trữ tất cả các frames hoạt ảnh đã được tải
         this.allAnimations = animations;
         this.currentAnimationName = defaultAnimation;
 
-        // Thiết lập các thuộc tính cơ bản
-        this.anchor.set(0.5);
-        this.animationSpeed = defaultSpeed; 
-        this.loop = true;
+        // Tạo AnimatedSprite nội bộ
+        this.sprite = new AnimatedSprite(initialFrames);
+        this.sprite.anchor.set(0.5);
+        this.sprite.animationSpeed = defaultSpeed;
+        this.sprite.loop = true;
 
-        // Bắt đầu phát hoạt ảnh mặc định nếu có frames
+        // Thêm AnimatedSprite vào Container
+        this.addChild(this.sprite);
+
         if (initialFrames.length > 0) {
-            this.play();
+            this.sprite.play();
         } else {
             console.warn(`[Character] Default animation "${defaultAnimation}" not found.`);
         }
@@ -53,23 +56,39 @@ export class Character extends AnimatedSprite {
 
         if (!newFrames || newFrames.length === 0) {
             console.warn(`[Character] Animation set "${name}" not found or empty.`);
-            this.textures = []; 
+            this.sprite.textures = [];
             return;
         }
-        
-        this.textures = newFrames;
+
+        this.sprite.textures = newFrames;
         this.currentAnimationName = name;
 
+        console.log(`[Character] switchAnimation -> ${name}, textures: ${this.sprite.textures?.length || 0}`);
+
         if (speed !== undefined) {
-            this.animationSpeed = speed;
+            this.sprite.animationSpeed = speed;
         }
-        
-        // SỬA LỖI: Luôn gọi gotoAndPlay(0) để đảm bảo animation chạy
-        this.gotoAndPlay(0); 
+
+        // Luôn phát animation mới
+        this.sprite.gotoAndPlay(0);
+        try { this.sprite.loop = true; this.sprite.play(); } catch (e) { /* ignore */ }
     }
 
+    // Proxy / helper getters to keep compatibility with existing code
+    get textures() { return this.sprite?.textures; }
+    get playing() { return this.sprite?.playing; }
+    gotoAndPlay(frame) { this.sprite.gotoAndPlay(frame); }
+    play() { this.sprite.play(); }
+    stop() { this.sprite.stop(); }
+
     update(ticker) {
-   
         // Lớp cơ sở không làm gì trong update, logic sẽ nằm ở lớp con.
+    }
+
+    destroy(options) {
+        if (this.sprite) {
+            try { this.sprite.destroy(options); } catch (e) { /* ignore */ }
+        }
+        super.destroy(options);
     }
 }

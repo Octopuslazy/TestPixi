@@ -2,15 +2,19 @@ import { Enemy } from './Enemy.js';
 import { GameConstants } from './GameConstants.js'; 
 
 export class ExploderEnemy extends Enemy {
+    onExplode = (x, y, frames) => {};
     constructor(animations, initialHealth = GameConstants.ENEMY_EXPLODER_HEALTH, damage = GameConstants.EXPLOSION_DAMAGE) {
         super(animations, 'Exploder', initialHealth, damage);
         this.scale.set(2); 
         this.defaultScaleX = this.scale.x; 
+        this.hasExploded = false;
     }
 
     // Phương thức phát nổ
     explode(player, enemies) {
-        if (this.isDead) return; // Bảo vệ: Tránh nổ hai lần
+        // Tránh nổ nhiều lần
+        if (this.hasExploded) return;
+        this.hasExploded = true;
         
         const radiusSq = GameConstants.EXPLOSION_RADIUS * GameConstants.EXPLOSION_RADIUS;
         enemies.forEach(enemy => {
@@ -19,17 +23,24 @@ export class ExploderEnemy extends Enemy {
             }
             
             // Sửa lỗi tiềm ẩn: Kiểm tra tính hợp lệ trước khi tính toán
-            if (enemy.x !== undefined && this.x !== undefined) {
+            if (enemy && enemy.x !== undefined && this.x !== undefined) {
                 const dx = enemy.x - this.x;
                 const dy = enemy.y - this.y;
                 if (dx * dx + dy * dy <= radiusSq) {
-                    enemy.takeDamage(this.damage); 
+                    const dmg = (typeof this.collisionDamage === 'number') ? this.collisionDamage : GameConstants.EXPLOSION_DAMAGE;
+                    console.log(`[Exploder] damaging ${enemy.enemyType} at (${enemy.x.toFixed(1)},${enemy.y.toFixed(1)}) before health=${enemy.health} dmg=${dmg}`);
+                    const died = enemy.takeDamage(dmg);
+                    console.log(`[Exploder] result: ${enemy.enemyType} died=${died}, after health=${enemy.health}`);
                 }
             }
         });
+        console.log(`[Exploder] exploded at (${this.x.toFixed(1)}, ${this.y.toFixed(1)}) with radius ${GameConstants.EXPLOSION_RADIUS}`);
+
+        // Đánh dấu là đã chết và xóa khỏi stage
+        this.onExplode(this.x, this.y);
         
         this.isDead = true; 
-        this.destroy(); 
+        this.destroy(); // Tự hủy
     }
 
     update(ticker, groundY, player, enemies, gameTime) {

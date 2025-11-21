@@ -101,7 +101,7 @@ const updateLayout = (app) => {
         // Vẽ lại đường màu đỏ liên tục để khớp với GROUND_Y_POSITION
         if (debugGroundLine) {
             debugGroundLine.clear();
-            debugGroundLine.rect(0, GROUND_Y_POSITION, app.screen.width, 2).fill(0xFF0000);
+            debugGroundLine.rect(0, GROUND_Y_POSITION, app.screen.width, 2).fill({ color: 0xFF0000, alpha: 1 });
         }
     });
 
