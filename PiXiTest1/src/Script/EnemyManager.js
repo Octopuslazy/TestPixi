@@ -42,6 +42,8 @@ export class EnemyManager {
         this.enemies = [];
         this.enemyBullets = [];
         this.enemiesRemaining = 0;
+        this.bossWasPresent = false;
+        this.bossDefeated = false;
         this.isWaveSpawned = false;
         this.timePerFrame = 1000 / 60; 
         
@@ -50,7 +52,7 @@ export class EnemyManager {
         this.bloodyFrames = allAnimations?.effects?.Bloody_frames || null;
 
         // helper to spawn blood effect at a point
-        this.createBlood = (x, y, scale = 1) => {
+        this.createBlood = (x, y, scale = 4) => {
             if (this.bloodyFrames && this.bloodyFrames.length > 0) {
                 const fx = new BloodEffect(this.bloodyFrames);
                 fx.x = x; fx.y = y;
@@ -59,15 +61,15 @@ export class EnemyManager {
             } else {
                 // fallback: small red circle
                 const gfx = new Graphics();
-                gfx.beginFill(0x990000, 1).drawCircle(0, 0, 8 * scale).endFill();
+                gfx.beginFill(0x990000, 1).drawCircle(0, 0, 12 * scale).endFill();
                 gfx.x = x; gfx.y = y;
                 this.currentScreen.addChild(gfx);
                 // fade out
                 let life = 0; const duration = 20;
                 const tick = (d) => {
                     life += d;
-                    gfx.alpha = Math.max(0, 1 - life / duration);
-                    if (life >= duration) {
+                    gfx.alpha = Math.max(0, 1 - life / (duration * 1.5));
+                    if (life >= duration * 1.5) {
                         this.app.ticker.remove(tick);
                         if (gfx.parent) gfx.parent.removeChild(gfx);
                         gfx.destroy();
@@ -86,18 +88,18 @@ export class EnemyManager {
         };
         
         // Hàm tạo hiệu ứng nổ (được gán cho Exploder)
-        this.createExplosion = (x, y) => {
-            if (this.explosionFrames && this.explosionFrames.length > 0) {
-                 const fx = new ExplosionEffect(this.explosionFrames);
-                 fx.scale.set(2);
-                 fx.x = x;
-                 fx.y = y;
-                 this.currentScreen.addChild(fx);
-                 console.log('[EnemyManager] ExplosionEffect created and added.');
-            } else {
+           this.createExplosion = (x, y, scale = 2) => {
+              if (this.explosionFrames && this.explosionFrames.length > 0) {
+                  const fx = new ExplosionEffect(this.explosionFrames);
+                  fx.scale.set(scale);
+                  fx.x = x;
+                  fx.y = y;
+                  this.currentScreen.addChild(fx);
+                  console.log('[EnemyManager] ExplosionEffect created and added.');
+              } else {
                  // Fallback (Logic Graphics giữ nguyên)
                  const gfx = new Graphics();
-                 gfx.fill({ color: 0xff6600, alpha: 0.9 }).circle(0, 0, GameConstants.EXPLOSION_RADIUS / 2);
+                  gfx.fill({ color: 0xff6600, alpha: 0.9 }).circle(0, 0, GameConstants.EXPLOSION_RADIUS / 2 * (scale || 1));
                  gfx.x = x;
                  gfx.y = y;
                  this.currentScreen.addChild(gfx);
@@ -128,6 +130,10 @@ export class EnemyManager {
         const waveData = SCREEN_WAVES[screenRef] || [];
 
         if (this.isWaveSpawned) return; 
+
+        // detect whether this wave includes a boss so callers can decide special rules
+        this.bossWasPresent = waveData.some(d => d.type === 'Boss');
+        this.bossDefeated = false;
         
         for (const data of waveData) {
             let rawFrames = this.enemyAnimations[`${data.type}_run`];
@@ -225,6 +231,8 @@ export class EnemyManager {
             if (enemy.isDead) {
                 if (enemy.destroy) enemy.destroy();
                 this.enemies.splice(i, 1);
+                // If a boss died, remember it so the UI can show upgrades only on boss defeat
+                try { if (enemy.enemyType === 'Boss') { this.bossDefeated = true; } } catch (e) {}
                 this.enemiesRemaining--;
             }
         }
@@ -260,8 +268,12 @@ export class EnemyManager {
                 const hitRadiusSq = (bullet.width/2 + enemy.width/2) * (bullet.width/2 + enemy.width/2);
                 
                 if (distanceSq < hitRadiusSq) {
-                    const enemyDied = enemy.takeDamage(GameConstants.PLAYER_BULLET_DAMAGE); 
+                    // Use the bullet's damage if present (upgrades may modify), otherwise fallback to constant
+                    const dmg = (typeof bullet.damage === 'number') ? bullet.damage : GameConstants.PLAYER_BULLET_DAMAGE;
+                    const enemyDied = enemy.takeDamage(dmg);
                     
+                    // spawn blood at impact (bigger visible splatter)
+                    try { this.createBlood(bullet.x, bullet.y, 6); } catch (e) {}
                     bullet.destroy();
                     this.playerBullets.splice(i, 1);
                     
@@ -327,6 +339,10 @@ export class EnemyManager {
                         if (this.player.isInvulnerable) return;
 
                         if (enemy.enemyType === 'Charger' && !enemy.isStunned) {
+                            // melee collision damage: spawn blood between player and enemy
+                            const cx = (enemy.x + this.player.x) / 2;
+                            const cy = (enemy.y + this.player.y) / 2;
+                            try { this.createBlood(cx, cy, 5); } catch (e) {}
                             playerKilled = this.player.takeDamage(GameConstants.ENEMY_COLLISION_DAMAGE, gameTime);
                             enemy.stun(); 
                             return;
@@ -362,11 +378,14 @@ export class EnemyManager {
                 if (distanceSq < hitRadiusSq) {
                     
                     if (this.player.isInvulnerable) {
+                        try { this.createBlood(bullet.x, bullet.y, 10); } catch (e) {}
                         bullet.destroy();
                         this.enemyBullets.splice(i, 1);
                         continue; 
                     }
                     
+                    // spawn blood on player hit
+                    try { this.createBlood(this.player.x, this.player.y, 10); } catch (e) {}
                     playerKilled = this.player.takeDamage(bullet.damage, gameTime);
                     
                     bullet.destroy();

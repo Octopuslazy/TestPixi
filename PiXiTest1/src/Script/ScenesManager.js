@@ -116,11 +116,13 @@ export async function initSceneManager(pixiApp) {
  * Chuyển đổi giữa các màn hình
  */
 export function gotoScreen(targetScreen) {
-    Screens.SCREEN1.visible = false;
-    Screens.SCREEN2.visible = false;
+    // Hide all game screens and overlay, then show the requested target.
+    Screens.SCREEN1.visible = false;
+    Screens.SCREEN2.visible = false;
+    Screens.SCREEN3.visible = false;
     Screens.OVERLAY.visible = false;
-    
-    targetScreen.visible = true;
+
+    if (targetScreen) targetScreen.visible = true;
 }
 
 export { backgrounds, createBackgroundSprite };

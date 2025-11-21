@@ -19,7 +19,7 @@ export const GameConstants = {
 
     // --- THÔNG SỐ NGƯỜI CHƠI (PLAYER STATS) ---
     PLAYER_BASE_HEALTH: 500,            
-    PLAYER_CLIP_SIZE: 30,               
+    PLAYER_CLIP_SIZE: 24,               
     
     // --- THÔNG SỐ KẺ THÙ (ENEMY STATS) ---
     ENEMY_SHOOTER_HEALTH: 100,

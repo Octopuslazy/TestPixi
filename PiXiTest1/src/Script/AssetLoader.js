@@ -71,9 +71,9 @@ const ANIMATION_MANIFEST = {
      ,
         'Bloody_frames':{
             url: bloodyUrl,
-            frameWidth:96,
-            frameHeight:48,
-            frameCount:12,
+            frameWidth:16,
+            frameHeight:16,
+            frameCount:18,
         }
      }
 };

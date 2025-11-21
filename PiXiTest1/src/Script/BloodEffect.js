@@ -3,7 +3,8 @@ import { AnimatedSprite } from 'pixi.js';
 export class BloodEffect extends AnimatedSprite {
     constructor(frames) {
         super(frames);
-        this.animationSpeed = 0.6;
+        // Slower playback so the blood splatter is visible longer
+        this.animationSpeed = 0.22;
         this.loop = false;
         this.anchor.set(0.5);
         this.play();

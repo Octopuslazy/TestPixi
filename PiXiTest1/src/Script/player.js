@@ -44,7 +44,27 @@ export class Player extends Character {
     this.gun.x = 20;
     this.gun.y = 0;
         
-        this.addChild(this.gun);
+        this.addChild(this.gun);
+
+        // Upgradeable stats (can be modified by UpgradeManager)
+        this.weaponDamageFlat = 0;
+        this.weaponDamagePercent = 0;
+        this.projectileSizePercent = 0;
+        this.projectileSpeedPercent = 0;
+        this.multiShot = 1;
+        this.clipSize = GameConstants.PLAYER_CLIP_SIZE;
+        this.maxHealth = GameConstants.PLAYER_BASE_HEALTH;
+        this.moveSpeedPercent = 0;
+
+        // Derived/computed stats (populated by recomputeStats)
+        this.finalDamage = GameConstants.PLAYER_BULLET_DAMAGE;
+        this.projectileScaleMultiplier = (GameConstants.PLAYER_BULLET_SCALE || 1);
+        this.finalMoveSpeed = MOVE_SPEED;
+
+        // Ensure derived stats are ready
+        if (typeof this.recomputeStats === 'function') {
+            this.recomputeStats();
+        }
     }
 
     // Phương thức xử lý sát thương
@@ -84,12 +104,39 @@ export class Player extends Character {
         console.log("Bắt đầu thay đạn (Reloading)...");
     }
 
+    // Recompute derived stats after upgrades are applied
+    recomputeStats() {
+        const base = GameConstants.PLAYER_BULLET_DAMAGE || 50;
+        const flat = (typeof this.weaponDamageFlat === 'number') ? this.weaponDamageFlat : 0;
+        const pct = (typeof this.weaponDamagePercent === 'number') ? this.weaponDamagePercent : 0;
+        this.finalDamage = Math.max(0, Math.round((base + flat) * (1 + pct)));
+
+        const sizePct = (typeof this.projectileSizePercent === 'number') ? this.projectileSizePercent : 0;
+        this.projectileScaleMultiplier = 1 * (1 + sizePct);
+
+        const speedPct = (typeof this.projectileSpeedPercent === 'number') ? this.projectileSpeedPercent : 0;
+        this.projectileSpeedMultiplier = 1 * (1 + speedPct);
+
+        this.clipSize = (typeof this.clipSize === 'number') ? this.clipSize : GameConstants.PLAYER_CLIP_SIZE;
+        // Refill ammo to new clip size so upgrades feel immediate
+        this.currentAmmo = this.clipSize;
+
+        this.maxHealth = (typeof this.maxHealth === 'number') ? this.maxHealth : GameConstants.PLAYER_BASE_HEALTH;
+        if (typeof this.health !== 'number' || this.health <= 0) {
+            this.health = this.maxHealth;
+        }
+
+        this.finalMoveSpeed = MOVE_SPEED * (1 + ((typeof this.moveSpeedPercent === 'number') ? this.moveSpeedPercent : 0));
+    }
+
     shoot() {
         if (this.isReloading || this.shootCooldown > 0 || this.health <= 0) {
             return;
         }
         
-        if (this.currentAmmo <= 0) {
+        // Calculate ammo cost per shot (multishot may cost multiple rounds)
+        const ammoCost = (typeof this.multiShotAmmoCost === 'number' && this.multiShotAmmoCost > 0) ? this.multiShotAmmoCost : 1;
+        if (this.currentAmmo < ammoCost) {
             this.reload();
             return;
         }
@@ -107,11 +154,31 @@ export class Player extends Character {
         };
         
         this.shootCooldown = this.SHOOT_DELAY;
-        this.currentAmmo--; // Giảm số lượng đạn
-        
-        this.onShoot(gunTipGlobalPos.x, gunTipGlobalPos.y, angle);
-        
-        if (this.currentAmmo === 0) {
+        // consume the appropriate number of rounds for this shot
+        this.currentAmmo -= ammoCost;
+
+        // Compute options influenced by upgrades/stat fields on the player.
+        const baseDamage = (typeof this.finalDamage === 'number') ? this.finalDamage : GameConstants.PLAYER_BULLET_DAMAGE;
+        const scaleMul = (typeof this.projectileScaleMultiplier === 'number') ? this.projectileScaleMultiplier : (GameConstants.PLAYER_BULLET_SCALE || 1);
+        const speedMul = (typeof this.projectileSpeedMultiplier === 'number') ? this.projectileSpeedMultiplier : 1;
+
+        const opts = { damage: baseDamage, scale: scaleMul, speedMultiplier: speedMul };
+
+        // Multi-shot support: spawn multiple bullets per trigger; ammo cost already consumed
+        const shots = (typeof this.multiShot === 'number' && this.multiShot > 1) ? Math.floor(this.multiShot) : 1;
+        if (shots === 1) {
+            this.onShoot(gunTipGlobalPos.x, gunTipGlobalPos.y, angle, opts);
+        } else {
+            const totalSpread = 0.28; // radians
+            const step = (shots > 1) ? totalSpread / (shots - 1) : 0;
+            const start = -totalSpread / 2;
+            for (let i = 0; i < shots; i++) {
+                const a = angle + start + (i * step);
+                this.onShoot(gunTipGlobalPos.x, gunTipGlobalPos.y, a, opts);
+            }
+        }
+
+        if (this.currentAmmo <= 0) {
             this.reload();
         }
     }
@@ -147,9 +214,10 @@ export class Player extends Character {
         // --- 1. VẬT LÝ VÀ LÀM MƯỢT DI CHUYỂN ---
         
         // TÍNH TOÁN LỰC:
-        // Áp dụng lực input
-        this.vx += (this.inputVx * MOVE_SPEED - this.vx) * 0.2; 
-        this.vy += (this.inputVy * MOVE_SPEED - this.vy) * 0.2; 
+        // Áp dụng lực input (use recomputed move speed)
+        const moveSpeedNow = (typeof this.finalMoveSpeed === 'number') ? this.finalMoveSpeed : MOVE_SPEED;
+        this.vx += (this.inputVx * moveSpeedNow - this.vx) * 0.2; 
+        this.vy += (this.inputVy * moveSpeedNow - this.vy) * 0.2; 
 
         // Áp dụng Drag (Làm chậm khi không có input)
         if (this.inputVx === 0 && this.inputVy === 0) {

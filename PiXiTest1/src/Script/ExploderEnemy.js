@@ -37,7 +37,8 @@ export class ExploderEnemy extends Enemy {
         console.log(`[Exploder] exploded at (${this.x.toFixed(1)}, ${this.y.toFixed(1)}) with radius ${GameConstants.EXPLOSION_RADIUS}`);
 
         // Đánh dấu là đã chết và xóa khỏi stage
-        this.onExplode(this.x, this.y);
+        // Request a larger explosion for Exploder enemies (double the default)
+        try { this.onExplode(this.x, this.y, 4); } catch (e) { try { this.onExplode(this.x, this.y); } catch (e2) {} }
         
         this.isDead = true; 
         this.destroy(); // Tự hủy

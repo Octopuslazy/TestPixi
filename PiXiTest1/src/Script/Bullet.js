@@ -1,4 +1,5 @@
 import { Sprite } from 'pixi.js';
+import { GameConstants } from './GameConstants.js';
 
 const BULLET_SPEED = 20; 
 const BULLET_LIFETIME = 150; 
@@ -7,8 +8,9 @@ export class Bullet extends Sprite {
     /**
      * @param {import('pixi.js').Texture} texture - Texture của viên đạn.
      * @param {number} angle - Góc bắn (radian).
+     * @param {object} [opts] - options: { damage, speed, scale }
      */
-    constructor(texture, angle) {
+    constructor(texture, angle, opts = {}) {
         super(texture);
 
         this.anchor.set(0.5); // Đặt neo ở giữa đạn
@@ -18,11 +20,21 @@ export class Bullet extends Sprite {
         // Orient the sprite visually to match its travel direction
         this.rotation = angle;
 
+        // Allow override of speed and damage per bullet
+        this.damage = (typeof opts.damage === 'number') ? opts.damage : (GameConstants?.PLAYER_BULLET_DAMAGE || 50);
+        // Allow either an absolute speed or a multiplier relative to the default BULLET_SPEED
+        let speed;
+        if (typeof opts.speed === 'number') speed = opts.speed;
+        else if (typeof opts.speedMultiplier === 'number') speed = BULLET_SPEED * opts.speedMultiplier;
+        else speed = BULLET_SPEED;
+
         // Tính toán vận tốc X và Y dựa trên góc bắn
-        this.vx = Math.cos(angle) * BULLET_SPEED;
-        this.vy = Math.sin(angle) * BULLET_SPEED;
-        
-        this.scale.set(1.5); 
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+
+        // Visual scale
+        const s = (typeof opts.scale === 'number') ? opts.scale : 1.5;
+        this.scale.set(s);
     }
 
     /**

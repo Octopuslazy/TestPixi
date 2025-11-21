@@ -5,6 +5,7 @@ import { Player } from './player.js';          
 import { Keyboard } from './keyboard.js';        
 import { initSceneManager, Screens, gotoScreen } from './ScenesManager.js'; 
 import { Bullet } from './Bullet.js';
+import { presentUpgradeChoices } from './UpgradeManager.js';
 import { EnemyManager } from './EnemyManager.js';
 
 let app; 
@@ -19,12 +20,15 @@ let MIN_PLAYER_X = 100;
 
 let currentScreen = null;
 let enemyManager;
+let upgradeShownForWave = false;
+let isPointerDown = false;
 
 // HUD elements
 let hudContainer;
 let healthText;
 let ammoText;
 let stageText;
+let instructionsText;
 
 // Hàm tính toán kích thước màn hình
 const updateLayout = () => {
@@ -33,6 +37,13 @@ const updateLayout = () => {
     if (enemyManager) {
         enemyManager.appScreenHeight = app.screen.height;
     }
+    // reposition instructions text if present
+    try {
+        if (instructionsText) {
+            instructionsText.x = app.screen.width / 2;
+            instructionsText.y = app.screen.height - 60;
+        }
+    } catch (e) {}
     
     console.log(`[Layout] MAX_PLAYER_X updated to: ${MAX_PLAYER_X}`);
 };
@@ -40,15 +51,24 @@ const updateLayout = () => {
 /**
  * Hàm tạo đạn (được gán vào player.onShoot)
  */
-function createBullet(globalX, globalY, angle) {
+function createBullet(globalX, globalY, angle, opts = {}) {
     if (!bulletTexture || !currentScreen || !Bullet) return; 
+    // Merge player-derived defaults so upgrades affect created bullets
+    const finalOpts = Object.assign({}, opts);
+    try {
+        if (player) {
+            if (typeof finalOpts.damage !== 'number') finalOpts.damage = (typeof player.finalDamage === 'number') ? player.finalDamage : GameConstants.PLAYER_BULLET_DAMAGE;
+            if (typeof finalOpts.scale !== 'number') finalOpts.scale = (typeof player.projectileScaleMultiplier === 'number') ? player.projectileScaleMultiplier : (GameConstants.PLAYER_BULLET_SCALE || 1);
+            if (typeof finalOpts.speed !== 'number' && typeof finalOpts.speedMultiplier !== 'number' && typeof player.projectileSpeedMultiplier === 'number') finalOpts.speedMultiplier = player.projectileSpeedMultiplier;
+        }
+    } catch (e) {}
 
-    const bullet = new Bullet(bulletTexture, angle);
+    const bullet = new Bullet(bulletTexture, angle, finalOpts);
     
     bullet.x = globalX; 
     bullet.y = globalY; 
 
-    // Apply configured player bullet scale
+    // Apply configured player bullet scale (global multiplier)
     try {
         const scale = GameConstants.PLAYER_BULLET_SCALE || 1;
         bullet.scale.x *= scale;
@@ -88,6 +108,7 @@ function changeScreen() {
     enemyManager.enemyBullets = []; 
     enemyManager.isWaveSpawned = false; 
     enemyManager.spawnWave(); 
+    upgradeShownForWave = false;
 
     // 4. Chuyển màn hình và đặt lại vị trí Player ở rìa trái (Y ở giữa)
     gotoScreen(currentScreen);
@@ -136,8 +157,25 @@ async function resetGame() {
     enemyManager.isWaveSpawned = false;
     enemyManager.spawnWave(); 
     
-    // 6. Đảm bảo Player được thêm vào Screen 1
-    if (!player.parent) Screens.SCREEN1.addChild(player);
+    // 6. Đảm bảo Player được thêm vào Screen 1 và khôi phục thuộc tính hiển thị
+    try {
+        console.log('[resetGame] Ensuring player parent/visibility. parent=', player?.parent?.constructor?.name, 'visible=', player?.visible, 'alpha=', player?.alpha, 'scaleX=', player?.scale?.x);
+        if (!player.parent) Screens.SCREEN1.addChild(player);
+        // Force visibility / alpha / scale in case death logic hid the sprite
+        if (player) {
+            player.visible = true;
+            player.alpha = 1;
+            if (typeof player.defaultScaleX === 'number') {
+                try { player.scale.set(player.defaultScaleX); } catch (e) {}
+            }
+            // Ensure common child parts are visible (AnimatedSprite, gun, etc.)
+            try { if (player.sprite) player.sprite.visible = true; } catch (e) {}
+            try { if (player.gun) player.gun.visible = true; } catch (e) {}
+            try { player.children.forEach(c => { if (c) c.visible = true; }); } catch (e) {}
+        }
+    } catch (e) {
+        console.error('[resetGame] Error ensuring player visibility', e);
+    }
     
     // 7. Khởi động lại game loop
     gameLoopRunning = true;
@@ -241,11 +279,20 @@ function showGameOverScreen() {
     player.x = MIN_PLAYER_X; 
     player.y = app.screen.height / 2; 
     
-    Screens.SCREEN1.addChild(player);
+    Screens.SCREEN1.addChild(player);
+    // Expose for debugging in browser console
+    try { window.DEBUG_player = player; } catch (e) {}
     
     console.log("[Index] Player đã được thêm vào Stage tại X: " + player.x + " Y: " + player.y);
     console.log('[Index] Player debug:', player.constructor.name, 'textures=', player.textures?.length, 'playing=', player.playing);
 
+    // --- Instructions (only for Screen 1) ---
+    const instrStyleSmall = new TextStyle({ fontFamily: 'Arial', fontSize: 18, fill: 'yellow', dropShadow: true, dropShadowColor: '#000000', dropShadowBlur: 2 });
+    instructionsText = new Text({ text: 'Move: A/D/W/S   Shoot: Click   Reload: R', style: instrStyleSmall });
+    instructionsText.anchor.set(0.5);
+    instructionsText.x = app.screen.width / 2;
+    instructionsText.y = app.screen.height - 60;
+    Screens.SCREEN1.addChild(instructionsText);
     // --- HUD (Health / Ammo / Stage) ---
     hudContainer = new Container();
     hudContainer.zIndex = 1000;
@@ -289,6 +336,8 @@ function showGameOverScreen() {
     enemyManager = new EnemyManager(app, Screens.SCREEN1, enemyAnimations, bulletTexture, app.screen.height, player, allFrames);
     enemyManager.setPlayerBullets(bullets); 
     enemyManager.spawnWave(); 
+    try { window.DEBUG_enemyManager = enemyManager; window.DEBUG_Screens = Screens; window.DEBUG_currentScreen = currentScreen; } catch (e) {}
+    upgradeShownForWave = false;
 
     // --- Layout ---
     updateLayout();
@@ -328,9 +377,17 @@ function showGameOverScreen() {
         mouseGlobalPos = e.global;
     });
     
-    app.stage.on('pointerdown', () => {
-        player.shoot();
+    app.stage.on('pointerdown', (e) => {
+        // update mouse position and mark pointer as down
+        mouseGlobalPos = e.global || mouseGlobalPos;
+        isPointerDown = true;
+        // Trigger an immediate shot (updates will continue while held)
+        try { player.shoot(); } catch (e) {}
     });
+
+    app.stage.on('pointerup', () => { isPointerDown = false; });
+    app.stage.on('pointerupoutside', () => { isPointerDown = false; });
+    app.stage.on('pointercancel', () => { isPointerDown = false; });
     
     gameLoopRunning = true; 
 
@@ -346,6 +403,11 @@ function showGameOverScreen() {
 
         // Cập nhật logic nhân vật
         player.update(tickerObj, app.screen.height, mouseGlobalPos, MIN_PLAYER_X, MAX_PLAYER_X); 
+
+        // If the pointer is held, attempt to shoot each frame (player.shoot() will respect cooldown)
+        try {
+            if (isPointerDown) player.shoot();
+        } catch (e) {}
 
         // --- CẬP NHẬT HUD ---
         if (healthText && ammoText && stageText) {
@@ -391,6 +453,30 @@ function showGameOverScreen() {
         try {
             if (typeof remaining === 'number' && remaining === 0) {
                 advanceText.visible = true;
+
+                // Present upgrades once per cleared wave
+                if (!upgradeShownForWave) {
+                    // On SCREEN3 only show upgrades when a boss was present and has been defeated
+                    const isScreen3 = (currentScreen === Screens.SCREEN3);
+                    const bossCondition = (!isScreen3) || (enemyManager && (enemyManager.bossWasPresent ? enemyManager.bossDefeated : true));
+                    if (bossCondition) {
+                        upgradeShownForWave = true;
+                        // pause game loop while selecting upgrade
+                        gameLoopRunning = false;
+                        presentUpgradeChoices(app, currentScreen, player)
+                            .then((picked) => {
+                                console.log('[Upgrades] Player picked:', picked && picked.id);
+                                try { if (player && typeof player.recomputeStats === 'function') player.recomputeStats(); } catch (e) { console.error('recomputeStats error', e); }
+                                // update HUD immediately
+                                try { if (ammoText) ammoText.text = `Ammo: ${player.currentAmmo}`; } catch (e) {}
+                                try { if (healthText) healthText.text = `Health: ${player.health}`; } catch (e) {}
+                            })
+                            .catch((e) => { console.error('[Upgrades] presentUpgradeChoices error', e); })
+                            .finally(() => {
+                                gameLoopRunning = true;
+                            });
+                    }
+                }
             } else {
                 advanceText.visible = false;
             }
@@ -402,10 +488,25 @@ function showGameOverScreen() {
         }
         
         // --- LOGIC CHUYỂN MÀN HÌNH ---
-        if (player.x >= MAX_PLAYER_X && remaining === 0) { 
-            player.x = MAX_PLAYER_X;
-            player.setMovement(0, 0); 
-            changeScreen();
+        if (player.x >= MAX_PLAYER_X) {
+            // Only allow progressing when there are no remaining enemies AND
+            // (if we're on SCREEN3 and a boss was present, the boss must be defeated)
+            const noEnemies = (typeof remaining === 'number' && remaining === 0);
+            let canAdvance = false;
+            try {
+                if (!noEnemies) canAdvance = false;
+                else if (currentScreen === Screens.SCREEN3 && enemyManager && enemyManager.bossWasPresent) {
+                    canAdvance = !!enemyManager.bossDefeated;
+                } else {
+                    canAdvance = true;
+                }
+            } catch (e) { canAdvance = false; }
+
+            if (canAdvance) {
+                player.x = MAX_PLAYER_X;
+                player.setMovement(0, 0);
+                changeScreen();
+            }
         }
     });
 
